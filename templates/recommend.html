@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>{{title}} | CineMatch</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="{{title}} — Movie details, cast, reviews, and recommendations on CineMatch.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='style.css') }}">
+</head>
+
+<body id="content">
+
+  <!-- Navbar -->
+  <nav class="cm-navbar">
+    <a href="/" class="cm-navbar-brand">Cine<span>Match</span></a>
+    <ul class="cm-nav-links">
+      <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="/genre?id=28&name=Action"><i class="fa fa-film"></i> Genres</a></li>
+    </ul>
+  </nav>
+
+  <!-- Movie Detail -->
+  <div class="cm-detail-container animate-fade-in">
+    
+    <div class="cm-detail-hero">
+      <!-- Poster -->
+      <div class="cm-detail-poster">
+        <img src="{{poster}}" alt="{{title}} poster">
+      </div>
+
+      <!-- Info -->
+      <div class="cm-detail-info">
+        <h1 class="cm-detail-title">{{title}}</h1>
+        
+        <!-- Meta Badges -->
+        <div class="cm-detail-meta">
+          <span class="cm-meta-badge rating">
+            <i class="fa fa-star"></i> {{vote_average}}/10
+            <span style="color: var(--text-muted); margin-left: 4px;">({{vote_count}} votes)</span>
+          </span>
+          <span class="cm-meta-badge"><i class="fa fa-clock-o"></i> {{runtime}}</span>
+          <span class="cm-meta-badge"><i class="fa fa-calendar"></i> {{release_date}}</span>
+          <span class="cm-meta-badge"><i class="fa fa-info-circle"></i> {{status}}</span>
+        </div>
+
+        <!-- Genres -->
+        <div style="margin-bottom: 16px;">
+          {% for g in genres.split(', ') %}
+            <span class="cm-genre-btn" style="cursor: default; font-size: 0.8rem; padding: 5px 14px;">{{g}}</span>
+          {% endfor %}
+        </div>
+
+        <!-- Overview -->
+        <div class="cm-detail-overview">
+          <strong>Overview</strong><br>
+          {{overview}}
+        </div>
+
+        <!-- Info Grid -->
+        <div class="cm-info-grid">
+          <div class="cm-info-item">
+            <label>Release Date</label>
+            <span>{{release_date}}</span>
+          </div>
+          <div class="cm-info-item">
+            <label>Runtime</label>
+            <span>{{runtime}}</span>
+          </div>
+          <div class="cm-info-item">
+            <label>Status</label>
+            <span>{{status}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cast Modals (keep Bootstrap modals) -->
+    {% for name, details in cast_details.items() if not cast_details.hidden %}
+    <div class="modal fade" id="{{details[0]}}" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{name}}</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true" style="color: white">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <img class="profile-pic" src="{{details[1]}}" alt="{{name}}" style="width: 250px; height: 400px; border-radius: 10px;" />
+            <div style="margin-left: 20px">
+              <p><strong>Birthday:</strong> {{details[2]}}</p>
+              <p><strong>Place of Birth:</strong> {{details[3]}}</p>
+              <p><strong>Biography:</strong></p>
+              <p>{{details[4]}}</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    
+    <!-- Top Cast Section -->
+    {% if casts|length > 1 %}
+    <section class="cm-section" style="width: 100%; margin-top: 50px;">
+      <h2 class="cm-section-title"><span class="emoji">🎭</span> Top Cast</h2>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -16px; margin-bottom: 24px; padding-left: 4px;">Click on any cast member to learn more</p>
+      <div class="cm-cast-grid">
+        {% for name, details in casts.items() if not casts.hidden %}
+        <div class="cm-cast-card" title="{{name}}" data-toggle="modal" data-target="#{{details[0]}}">
+          <img src="{{details[2]}}" alt="{{name}}" loading="lazy">
+          <div class="cm-cast-card-body">
+            <h6>{{name|title}}</h6>
+            <small>{{details[1]|title}}</small>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- User Reviews Section -->
+    {% if reviews|length > 0 %}
+    <section class="cm-section" style="width: 100%; margin-top: 50px;">
+      <h2 class="cm-section-title"><span class="emoji">💬</span> User Reviews <span style="font-size: 0.85rem; font-weight: 400; color: var(--text-muted); margin-left: 8px;">({{reviews|length}})</span></h2>
+      <div class="cm-reviews-container">
+        {% for review, status in reviews.items() if not reviews.hidden %}
+        <div class="cm-review-card">
+          <div class="cm-review-avatar">
+            <i class="fa fa-user-circle"></i>
+          </div>
+          <div class="cm-review-content">
+            <div class="cm-review-header">
+              <span class="cm-reviewer-name">Viewer</span>
+              <span class="cm-sentiment-badge {% if status == 'Good' %}good{% else %}bad{% endif %}">
+                <i class="fa {% if status == 'Good' %}fa-thumbs-up{% else %}fa-thumbs-down{% endif %}"></i>
+                {{status}}
+              </span>
+            </div>
+            <p class="cm-review-text collapsed">{{review}}</p>
+            <button class="cm-read-more-btn" onclick="toggleReview(this)">Read more</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <script>
+      function toggleReview(btn) {
+        var textEl = btn.previousElementSibling;
+        if (textEl.classList.contains('collapsed')) {
+          textEl.classList.remove('collapsed');
+          btn.textContent = 'Read less';
+        } else {
+          textEl.classList.add('collapsed');
+          btn.textContent = 'Read more';
+        }
+      }
+    </script>
+    {% endif %}
+
+    <!-- Recommended Movies Section -->
+    {% if movie_cards|length > 1 %}
+    <section class="cm-section" style="width: 100%; margin-top: 50px;">
+      <h2 class="cm-section-title"><span class="emoji">🎬</span> Recommended For You</h2>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: -16px; margin-bottom: 24px; padding-left: 4px;">Click any movie for more recommendations</p>
+      <div class="cm-rec-grid">
+        {% for poster, title in movie_cards.items() if not movie_cards.hidden %}
+        <div class="cm-card" title="{{title}}" onclick="recommendcard(this)">
+          <div class="cm-card-img-wrapper">
+            <img alt="{{title}}" src="{{poster}}" loading="lazy">
+            <div class="cm-card-overlay">
+              <button class="cm-card-play-btn"><i class="fa fa-play"></i></button>
+            </div>
+          </div>
+          <div class="cm-card-body">
+            <h5 class="cm-card-title">{{title|capitalize}}</h5>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="cm-footer">
+    <span class="cm-footer-brand">CineMatch</span>
+    <div class="social-links">
+      <a href="#" title="GitHub"><i class="fa fa-github"></i></a>
+      <a href="#" title="LinkedIn"><i class="fa fa-linkedin"></i></a>
+      <a href="#" title="Twitter"><i class="fa fa-twitter"></i></a>
+    </div>
+    <p>Built with ❤️ using Flask, TMDB API & Machine Learning</p>
+  </footer>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script type="text/javascript" src="{{url_for('static', filename='recommend.js')}}"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+</body>
+</html>

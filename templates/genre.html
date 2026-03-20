@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>{{genre_name}} Movies | CineMatch</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Discover the best {{genre_name}} movies — curated recommendations on CineMatch.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='style.css') }}">
+  <script type="text/javascript">
+    var films = {{suggestions|tojson}};
+    var genreId = '{{genre_id}}';
+    var genreName = '{{genre_name}}';
+  </script>
+</head>
+
+<body id="content">
+
+  <!-- Navbar -->
+  <nav class="cm-navbar">
+    <a href="/" class="cm-navbar-brand">Cine<span>Match</span></a>
+    <ul class="cm-nav-links">
+      <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="#" class="active"><i class="fa fa-film"></i> Genres</a></li>
+    </ul>
+  </nav>
+
+  <div id="loader"></div>
+
+  <!-- Breadcrumb -->
+  <div class="cm-breadcrumb">
+    <a href="/"><i class="fa fa-home"></i> Home</a>
+    <span class="separator">›</span>
+    <span>{{genre_name}} Movies</span>
+  </div>
+
+  <!-- Page Content -->
+  <section class="cm-section animate-fade-in-up" style="padding-top: 10px;">
+    <h2 class="cm-genre-page-title">🎬 {{genre_name}} Movies</h2>
+
+    <div class="cm-genre-grid" id="genre-grid">
+      <!-- Skeleton loaders -->
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+    </div>
+  </section>
+
+  <!-- Fail Message -->
+  <div class="fail">
+    <h3>Sorry! The movie you requested is not in our database.</h3>
+  </div>
+
+  <div class="results">
+    <center><h2 id="name" class="text-uppercase"></h2></center>
+  </div>
+
+  <input type="hidden" id="autoComplete">
+
+  <!-- Footer -->
+  <footer class="cm-footer">
+    <span class="cm-footer-brand">CineMatch</span>
+    <div class="social-links">
+      <a href="#" title="GitHub"><i class="fa fa-github"></i></a>
+      <a href="#" title="LinkedIn"><i class="fa fa-linkedin"></i></a>
+      <a href="#" title="Twitter"><i class="fa fa-twitter"></i></a>
+    </div>
+    <p>Built with ❤️ using Flask, TMDB API & Machine Learning</p>
+  </footer>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script type="text/javascript" src="{{url_for('static', filename='recommend.js')}}"></script>
+  
+  <script>
+    $(document).ready(function(){
+      var my_api_key = '5ce2ef2d7c461dea5b4e04900d1c561e';
+      var lower_films = films.map(f => f.toLowerCase());
+      var genreHtml = "";
+      var count = 0;
+
+      function fetchGenre(page) {
+          if (count >= 24) return;
+          var genre_url = 'https://api.themoviedb.org/3/discover/movie?api_key=' + my_api_key + '&with_genres=' + genreId + '&sort_by=popularity.desc&page=' + page;
+          
+          $.ajax({
+            type: 'GET',
+            url: genre_url,
+            success: function(response){
+              var movies = response.results;
+              
+              for(var i=0; i<movies.length; i++){
+                if(count >= 24) break; 
+                
+                var movie = movies[i];
+                var title = movie.title || movie.original_title;
+                
+                if(lower_films.includes(title.toLowerCase()) && movie.poster_path){
+                  var poster_url = "https://image.tmdb.org/t/p/w500" + movie.poster_path;
+                  var delay = count * 0.06;
+                  
+                  genreHtml += `
+                    <div class="cm-card" title="${title}" onclick="recommendcard(this)" style="animation-delay: ${delay}s; opacity: 0;">
+                      <div class="cm-card-img-wrapper">
+                        <img alt="${title}" src="${poster_url}" loading="lazy">
+                        <div class="cm-card-overlay">
+                          <button class="cm-card-play-btn"><i class="fa fa-play"></i></button>
+                        </div>
+                      </div>
+                      <div class="cm-card-body">
+                        <h5 class="cm-card-title">${title}</h5>
+                      </div>
+                    </div>
+                  `;
+                  count++;
+                }
+              }
+              $('#genre-grid').html(genreHtml);
+
+              if (count < 24 && page < 25) {
+                fetchGenre(page + 1);
+              }
+            },
+            error: function(){
+              if(count === 0 && page === 1) $('#genre-grid').html('<p style="color: var(--text-muted); font-style: italic; padding: 40px;">Could not load genre movies at the moment.</p>');
+            }
+          });
+      }
+      
+      fetchGenre(1);
+    });
+  </script>
+</body>
+</html>

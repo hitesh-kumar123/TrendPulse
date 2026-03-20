@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>CineMatch — Discover Movies You'll Love</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="CineMatch — AI-powered movie recommendation engine. Discover your next favorite film with intelligent suggestions.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@7.2.0/dist/css/autoComplete.min.css">
+  <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='style.css') }}">
+  <script type="text/javascript">
+    var films = {{suggestions|tojson}};
+  </script>
+</head>
+
+<body id="content">
+
+  <!-- Navbar -->
+  <nav class="cm-navbar">
+    <a href="/" class="cm-navbar-brand">Cine<span>Match</span></a>
+    <ul class="cm-nav-links">
+      <li><a href="/" class="active"><i class="fa fa-home"></i> Home</a></li>
+      <li><a href="/genre?id=28&name=Action"><i class="fa fa-film"></i> Genres</a></li>
+    </ul>
+  </nav>
+
+  <div id="loader"></div>
+
+  <!-- Hero Section -->
+  <section class="cm-hero">
+    <h1 class="cm-hero-title">Discover Movies <span class="accent">You'll Love</span></h1>
+    <p class="cm-hero-subtitle">AI-powered recommendations tailored just for you</p>
+
+    <div class="cm-search-wrapper">
+      <i class="fa fa-search search-icon"></i>
+      <input type="text" name="movie" class="movie" id="autoComplete" autocomplete="off" placeholder="Search for a movie..." required="required" />
+      <button class="cm-search-btn movie-button" disabled="true">Search</button>
+    </div>
+
+    <!-- Genre Buttons -->
+    <div class="cm-genres">
+      <a href="/genre?id=28&name=Action%20%26%20Adventure" class="cm-genre-btn">🎬 Action</a>
+      <a href="/genre?id=35&name=Comedy" class="cm-genre-btn">😂 Comedy</a>
+      <a href="/genre?id=27&name=Horror" class="cm-genre-btn">👻 Horror</a>
+      <a href="/genre?id=878&name=Sci-Fi" class="cm-genre-btn">🚀 Sci-Fi</a>
+      <a href="/genre?id=10749&name=Romance" class="cm-genre-btn">💕 Romance</a>
+      <a href="/genre?id=53&name=Thriller" class="cm-genre-btn">🔪 Thriller</a>
+      <a href="/genre?id=18&name=Drama" class="cm-genre-btn">🎭 Drama</a>
+      <a href="/genre?id=16&name=Animation" class="cm-genre-btn">✨ Animation</a>
+    </div>
+  </section>
+
+  <!-- Fail Message -->
+  <div class="fail">
+    <h3>Sorry! The movie you requested is not in our database.</h3>
+  </div>
+
+  <div class="results">
+    <center><h2 id="name" class="text-uppercase"></h2></center>
+  </div>
+
+  <!-- Trending Movies Section -->
+  <section class="cm-section animate-fade-in-up">
+    <h2 class="cm-section-title"><span class="emoji">🔥</span> Trending Now</h2>
+    <div class="cm-carousel-wrapper">
+      <button class="cm-carousel-btn left" id="scroll-left-btn"><i class="fa fa-angle-left"></i></button>
+      <div class="cm-carousel" id="trending-movies-list">
+        <!-- Skeleton loaders -->
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+        <div class="cm-skeleton-card"><div class="img-placeholder"></div><div class="text-placeholder"></div></div>
+      </div>
+      <button class="cm-carousel-btn right" id="scroll-right-btn"><i class="fa fa-angle-right"></i></button>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="cm-footer">
+    <span class="cm-footer-brand">CineMatch</span>
+    <div class="social-links">
+      <a href="#" title="GitHub"><i class="fa fa-github"></i></a>
+      <a href="#" title="LinkedIn"><i class="fa fa-linkedin"></i></a>
+      <a href="#" title="Twitter"><i class="fa fa-twitter"></i></a>
+    </div>
+    <p>Built with ❤️ using Flask, TMDB API & Machine Learning</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tarekraafat/autocomplete.js@7.2.0/dist/js/autoComplete.min.js"></script>
+  <script type="text/javascript" src="{{url_for('static', filename='autocomplete.js')}}"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script type="text/javascript" src="{{url_for('static', filename='recommend.js')}}"></script>
+  
+  <script>
+    $(document).ready(function(){
+      var my_api_key = '5ce2ef2d7c461dea5b4e04900d1c561e';
+      var lower_films = films.map(f => f.toLowerCase());
+      var trendingHtml = "";
+      var count = 0;
+
+      function fetchTrending(page) {
+          if (count >= 15) return;
+          var trending_url = 'https://api.themoviedb.org/3/movie/popular?api_key=' + my_api_key + '&page=' + page;
+          
+          $.ajax({
+            type: 'GET',
+            url: trending_url,
+            success: function(response){
+              var movies = response.results;
+              
+              for(var i=0; i<movies.length; i++){
+                if(count >= 15) break; 
+                
+                var movie = movies[i];
+                var title = movie.title || movie.original_title;
+                
+                if(lower_films.includes(title.toLowerCase()) && movie.poster_path){
+                  var poster_url = "https://image.tmdb.org/t/p/w500" + movie.poster_path;
+                  var rating = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
+                  var delay = count * 0.08;
+                  
+                  trendingHtml += `
+                    <div class="cm-card" title="${title}" onclick="recommendcard(this)" style="animation-delay: ${delay}s; opacity: 0;">
+                      <div class="cm-card-img-wrapper">
+                        <img alt="${title}" src="${poster_url}" loading="lazy">
+                        <div class="cm-card-overlay">
+                          <button class="cm-card-play-btn"><i class="fa fa-play"></i></button>
+                        </div>
+                      </div>
+                      <div class="cm-card-body">
+                        <h5 class="cm-card-title">${title}</h5>
+                      </div>
+                    </div>
+                  `;
+                  count++;
+                }
+              }
+              $('#trending-movies-list').html(trendingHtml);
+              
+              if (count < 15 && page < 10) {
+                fetchTrending(page + 1);
+              }
+            },
+            error: function(){
+              if(count === 0 && page === 1) $('#trending-movies-list').html('<p style="color: var(--text-muted); font-style: italic; padding: 40px;">Could not load trending movies at the moment.</p>');
+            }
+          });
+      }
+      
+      fetchTrending(1);
+      
+      $('#scroll-left-btn').click(function(){
+        document.getElementById('trending-movies-list').scrollBy({ left: -600, behavior: 'smooth' });
+      });
+      
+      $('#scroll-right-btn').click(function(){
+        document.getElementById('trending-movies-list').scrollBy({ left: 600, behavior: 'smooth' });
+      });
+    });
+  </script>
+</body>
+</html>
