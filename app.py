@@ -1,63 +1,95 @@
+import itertools
+import os
 import json
 import pickle
+from functools import lru_cache
 import requests
-import bs4 as bs
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
-# Reloading the server to fetch newly generated ML Pickles
-import urllib.request
 from flask import Flask, render_template, request
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import CountVectorizer
+import scipy.sparse as sp
 
-# loading the dataset and the trained model
+# Load models and dataset at startup
 try:
-    clf = pickle.load(open("Artifacts/nlp_model.pkl", 'rb'))
-    vectorizer = pickle.load(open("Artifacts/tranform.pkl",'rb'))
-except Exception as e:
-    print(f"Error in loading Artifacts: {e}")
-
-# creating a similarity matrix using count vectorizer and cosine similarity
-def create_similarity():
-    try:
-        data = pd.read_csv("Artifacts/main_data.csv")
-        cv = CountVectorizer()
-        count_matrix = cv.fit_transform(data['comb']) 
-        similarity = cosine_similarity(count_matrix)
-        return data,similarity
-    except Exception as e:
-        print(e)
-
-def rcmd(m):
-    m = m.lower()
-    try:
-        data.head()
-        similarity.shape 
-    except:
-        data, similarity = create_similarity()
-    if m not in data['movie_title'].unique():
-        return('Sorry! The movie you requested is not in our database. Please check the spelling or try with some other movies')
-    else:
-        i = data.loc[data['movie_title']==m].index[0]
-        lst = list(enumerate(similarity[i]))
-        lst = sorted(lst, key = lambda x:x[1] ,reverse=True)
-        lst = lst[1:11] # excluding first item since it is the requested movie itself
-        l = []
-        for i in range(len(lst)):
-            a = lst[i][0]
-            l.append(data['movie_title'][a])
-        return l
+    clf = pickle.load(open("models/nlp_model.pkl", 'rb'))
+    vectorizer = pickle.load(open("models/tranform.pkl",'rb'))
     
-# converting list of string to list (eg. "["abc","def"]" to ["abc","def"])
-def convert_to_list(my_list):
-    my_list = my_list.split('","')
-    my_list[0] = my_list[0].replace('["','')
-    my_list[-1] = my_list[-1].replace('"]','')
-    return my_list
+    movies_dict = pickle.load(open('models/movie_dict.pkl', 'rb'))
+    data = pd.DataFrame(movies_dict)
+    
+    # Pre-normalize sparse vectors at startup for fast dot product later
+    raw_matrix = sp.load_npz('models/vectors.npz')
+    norms = np.array(raw_matrix.multiply(raw_matrix).sum(axis=1)).flatten() ** 0.5
+    norms[norms == 0] = 1  # Avoid division by zero
+    similarity_matrix = raw_matrix.multiply(1 / norms[:, np.newaxis])
+    similarity_matrix = sp.csr_matrix(similarity_matrix)
+    
+    # Pre-extract vote_averages array for lighting fast Numpy access later (~1ms)
+    vote_averages = np.array(data['vote_average'].fillna(5.0).astype(float).values)
+    print("Models loaded successfully.")
+except Exception as e:
+    print(f"Error loading models: {e}")
+
+def rcmd(m, tmdb_id=None):
+    return _rcmd_cached(m.lower(), int(tmdb_id) if tmdb_id and str(tmdb_id).strip().lower() not in ['','null','undefined','none'] else None)
+
+@lru_cache(maxsize=512)
+def _rcmd_cached(m, tmdb_id):
+    try:
+        # Prefer TMDB ID match for accuracy; fallback to title search
+        if tmdb_id is not None:
+            if tmdb_id not in data['movie_id'].values:
+                return '__NOT_IN_DB__'
+            i = data[data['movie_id'] == tmdb_id].index[0]
+        else:
+            titles_lower = data['title'].str.lower().tolist()
+            if m not in titles_lower:
+                return '__NOT_IN_DB__'
+            i = titles_lower.index(m)
+
+        target_lang = data.iloc[i]['original_language']
+
+        # Fast dot product (pre-normalized at startup = cosine similarity)
+        sim_scores_np = similarity_matrix.dot(similarity_matrix[i].T).toarray().flatten()
+
+        # Vectorized Hybrid Scoring: 75% content + 25% popularity in pure Numpy (~1ms)
+        hybrid_scores = (sim_scores_np * 0.75) + ((vote_averages / 10.0) * 0.25)
+
+        # Get top 500 indices instantly using argsort
+        top_indices = np.argsort(hybrid_scores)[::-1][1:500].tolist()
+
+        l = []
+        # Phase 1: Same-language
+        for a in top_indices:
+            rec_title = data.iloc[a]['title']
+            if rec_title.lower() != m and data.iloc[a]['original_language'] == target_lang:
+                l.append(rec_title)
+            if len(l) == 10:
+                break
+
+        # Phase 2: Fill remaining with any language
+        if len(l) < 10:
+            for a in top_indices:
+                rec_title = data.iloc[a]['title']
+                if rec_title.lower() != m and rec_title not in l:
+                    l.append(rec_title)
+                if len(l) == 10:
+                    break
+
+        return l
+    except Exception as e:
+        print("rcmd error: ", e)
+        return []
+
+
 
 def get_suggestions():
-    data = pd.read_csv('Artifacts/main_data.csv')
-    return list(data['movie_title'].str.capitalize())
+    try:
+        return list(data['title'].str.capitalize())
+    except:
+        return []
 
 app = Flask(__name__)
 
@@ -77,96 +109,183 @@ def genre():
 @app.route("/similarity",methods=["POST"])
 def similarity():
     movie = request.form['name']
-    rc = rcmd(movie)
+    movie_id = request.form.get('movie_id')
+    rc = rcmd(movie, movie_id)
     if type(rc)==type('string'):
         return rc
     else:
         m_str="---".join(rc)
         return m_str
 
-@app.route("/recommend",methods=["POST"])
-def recommend():
-    # getting data from AJAX request
-    title = request.form['title']
-    cast_ids = request.form['cast_ids']
-    cast_names = request.form['cast_names']
-    cast_chars = request.form['cast_chars']
-    cast_bdays = request.form['cast_bdays']
-    cast_bios = request.form['cast_bios']
-    cast_places = request.form['cast_places']
-    cast_profiles = request.form['cast_profiles']
-    imdb_id = request.form['imdb_id']
-    poster = request.form['poster']
-    genres = request.form['genres']
-    overview = request.form['overview']
-    vote_average = request.form['rating']
-    vote_count = request.form['vote_count']
-    release_date = request.form['release_date']
-    runtime = request.form['runtime']
-    status = request.form['status']
-    rec_movies = request.form['rec_movies']
-    rec_posters = request.form['rec_posters']
+TMDB_API_KEY = '5ce2ef2d7c461dea5b4e04900d1c561e'
+TMDB_BASE = 'https://api.themoviedb.org/3'
+IMG_BASE = 'https://image.tmdb.org/t/p/original'
 
-    # get movie suggestions for auto complete
+def tmdb_get(path, params=None):
+    """Helper to make a TMDB GET request."""
+    try:
+        p = {'api_key': TMDB_API_KEY}
+        if params:
+            p.update(params)
+        r = requests.get(f'{TMDB_BASE}/{path}', params=p, timeout=8)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print('TMDB fetch error:', e)
+    return None
+
+def fetch_poster_for_title(title):
+    """Search TMDB for a rec title and return (poster_url, tmdb_id)."""
+    data = tmdb_get('search/movie', {'query': title})
+    if not data or not data.get('results'):
+        return ('', '')
+    best = max(data['results'], key=lambda x: x.get('vote_count', 0))
+    poster = IMG_BASE + best['poster_path'] if best.get('poster_path') else ''
+    return (poster, best['id'])
+
+def fetch_actor_bio(actor_id):
+    """Fetch birthday, biography and place of birth for one actor."""
+    data = tmdb_get(f'person/{actor_id}')
+    if not data:
+        return ('Not Available', 'No biography available.', 'Not Available')
+    bday = data.get('birthday', '') or ''
+    if bday:
+        from datetime import datetime
+        try:
+            bday = datetime.strptime(bday, '%Y-%m-%d').strftime('%b %d %Y')
+        except:
+            pass
+    bio = data.get('biography') or 'No biography available.'
+    place = data.get('place_of_birth') or 'Not Available'
+    return (bday or 'Not Available', bio, place)
+
+# Simple in-memory cache for /get_details results
+_details_cache = {}
+
+@app.route("/get_details", methods=["POST"])
+def get_details():
+    payload = request.get_json()
+    movie_id   = payload.get('movie_id')
+    rec_titles = tuple(payload.get('rec_titles', []))  # make hashable
+    not_in_db  = payload.get('not_in_db', False)
+
+    # ── Cache hit: return instantly ──────────────────────────────────────
+    cache_key = (movie_id, rec_titles)
+    if cache_key in _details_cache:
+        return _details_cache[cache_key]
+
     suggestions = get_suggestions()
 
-    # call the convert_to_list function for every string that needs to be converted to list
-    rec_movies = convert_to_list(rec_movies)
-    rec_posters = convert_to_list(rec_posters)
-    cast_names = convert_to_list(cast_names)
-    cast_chars = convert_to_list(cast_chars)
-    cast_profiles = convert_to_list(cast_profiles)
-    cast_bdays = convert_to_list(cast_bdays)
-    cast_bios = convert_to_list(cast_bios)
-    cast_places = convert_to_list(cast_places)
-    
-    # convert string to list (eg. "[1,2,3]" to [1,2,3])
-    cast_ids = cast_ids.split(',')
-    cast_ids[0] = cast_ids[0].replace("[","")
-    cast_ids[-1] = cast_ids[-1].replace("]","")
-    
-    # rendering the string to python string
-    for i in range(len(cast_bios)):
-        cast_bios[i] = cast_bios[i].replace(r'\n', '\n').replace(r'\"','\"')
-    
-    # combining multiple lists as a dictionary which can be passed to the html file so that it can be processed easily and the order of information will be preserved
-    movie_cards = {rec_posters[i]: rec_movies[i] for i in range(len(rec_posters))}
-    
-    casts = {cast_names[i]:[cast_ids[i], cast_chars[i], cast_profiles[i]] for i in range(len(cast_profiles))}
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        # Fire movie/cast/review calls simultaneously (NO poster fetching here)
+        fut_movie   = ex.submit(tmdb_get, f'movie/{movie_id}')
+        fut_credits = ex.submit(tmdb_get, f'movie/{movie_id}/credits')
+        fut_reviews = ex.submit(tmdb_get, f'movie/{movie_id}/reviews')
 
-    cast_details = {cast_names[i]:[cast_ids[i], cast_profiles[i], cast_bdays[i], cast_places[i], cast_bios[i]] for i in range(len(cast_places))}
+        movie_details = fut_movie.result()
+        credits_data  = fut_credits.result()
+        reviews_data  = fut_reviews.result()
 
-    # Fetching reviews from TMDB API instead of scraping IMDB
-    reviews_list = []
-    reviews_status = []
-    try:
-        tmdb_api_key = '5ce2ef2d7c461dea5b4e04900d1c561e'
-        url = 'https://api.themoviedb.org/3/movie/{}/reviews?api_key={}'.format(imdb_id, tmdb_api_key)
-        response = requests.get(url)
-        if response.status_code == 200:
-            reviews_data = response.json()
-            for review in reviews_data.get('results', []):
-                review_text = review.get('content', '')
-                if review_text:
-                    try:
-                        # passing the review to our model
-                        movie_review_list = np.array([review_text])
-                        movie_vector = vectorizer.transform(movie_review_list)
-                        pred = clf.predict(movie_vector)
-                        reviews_status.append('Good' if pred[0] == 1 else 'Bad')
-                        reviews_list.append(review_text)
-                    except Exception as e:
-                        print("Error predicting review sentiment:", e)
-    except Exception as e:
-        print("Error fetching TMDB reviews:", e)
+    if not movie_details:
+        return "Error fetching movie details from TMDB.", 500
 
-    # combining reviews and comments into a dictionary
-    movie_reviews = {reviews_list[i]: reviews_status[i] for i in range(len(reviews_list))}     
+    # -- Movie metadata --
+    imdb_id      = movie_details.get('imdb_id', '')
+    poster       = IMG_BASE + movie_details['poster_path'] if movie_details.get('poster_path') else ''
+    overview     = movie_details.get('overview', '')
+    vote_average = movie_details.get('vote_average', 0)
+    vote_count   = '{:,}'.format(movie_details.get('vote_count', 0))
+    release_date = movie_details.get('release_date', '')
+    if release_date:
+        from datetime import datetime
+        try:
+            release_date = datetime.strptime(release_date, '%Y-%m-%d').strftime('%b %d %Y')
+        except:
+            pass
+    runtime_min  = movie_details.get('runtime', 0) or 0
+    if runtime_min % 60 == 0:
+        runtime = f"{runtime_min // 60} hour(s)"
+    else:
+        runtime = f"{runtime_min // 60} hour(s) {runtime_min % 60} min(s)"
+    status       = movie_details.get('status', '')
+    genres       = ', '.join(g['name'] for g in movie_details.get('genres', []))
+    title        = movie_details.get('title') or movie_details.get('original_title', '')
 
-    # passing all the data to the html file
-    return render_template('recommend.html',title=title,poster=poster,overview=overview,vote_average=vote_average,
-        vote_count=vote_count,release_date=release_date,runtime=runtime,status=status,genres=genres,
-        movie_cards=movie_cards,reviews=movie_reviews,casts=casts,cast_details=cast_details)
+    # -- Cast (top 10) --
+    cast_raw     = (credits_data or {}).get('cast', [])[:10]
+    cast_ids     = [str(c['id']) for c in cast_raw]
+    cast_names   = [c['name'] for c in cast_raw]
+    cast_chars   = [c.get('character', '') for c in cast_raw]
+    cast_profiles= [IMG_BASE + c['profile_path'] if c.get('profile_path')
+                    else f"https://ui-avatars.com/api/?name={requests.utils.quote(c['name'])}&size=240&background=111&color=fff"
+                    for c in cast_raw]
+
+    # -- Actor bios in parallel --
+    cast_bdays, cast_bios, cast_places = [], [], []
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        bio_futs = [ex.submit(fetch_actor_bio, cid) for cid in cast_ids]
+        for fut in bio_futs:
+            bday, bio, place = fut.result()
+            cast_bdays.append(bday)
+            cast_bios.append(bio)
+            cast_places.append(place)
+
+    # -- Reviews + Sentiment --
+    reviews_list, reviews_status = [], []
+    for review in (reviews_data or {}).get('results', []):
+        text = review.get('content', '')
+        if text:
+            try:
+                vec = vectorizer.transform(np.array([text]))
+                pred = clf.predict(vec)
+                reviews_status.append('Good' if pred[0] == 1 else 'Bad')
+                reviews_list.append(text)
+            except Exception as e:
+                print('Sentiment error:', e)
+    movie_reviews = dict(zip(reviews_list, reviews_status))
+
+    # Pass rec_titles to template as embedded JSON for JS to pick up
+    movie_cards = {}  # JS will inject recommendations dynamically after separate /get_rec_posters call
+    casts = {cast_names[i]: [cast_ids[i], cast_chars[i], cast_profiles[i]]
+             for i in range(len(cast_names))}
+    cast_details_dict = {cast_names[i]: [cast_ids[i], cast_profiles[i], cast_bdays[i], cast_places[i], cast_bios[i]]
+                         for i in range(len(cast_names))}
+
+    result = render_template('recommend.html',
+        title=title, poster=poster, overview=overview,
+        vote_average=vote_average, vote_count=vote_count,
+        release_date=release_date, runtime=runtime, status=status,
+        genres=genres, movie_cards=movie_cards, reviews=movie_reviews,
+        casts=casts, cast_details=cast_details_dict, not_in_db=not_in_db,
+        rec_titles_json=json.dumps(list(rec_titles)))
+
+    _details_cache[cache_key] = result
+    return result
+
+@app.route("/get_rec_posters", methods=["POST"])
+def get_rec_posters():
+    """Separate fast endpoint: fetch posters for 10 recommended movies in parallel."""
+    payload = request.get_json()
+    rec_titles_list = payload.get('rec_titles', [])
+
+    if not rec_titles_list:
+        return json.dumps({'movies': [], 'posters': [], 'ids': []})
+
+    poster_results = {}
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        fut_map = {ex.submit(fetch_poster_for_title, t): t for t in rec_titles_list}
+        for fut, t in fut_map.items():
+            poster_results[t] = fut.result()
+
+    movies, posters, ids = [], [], []
+    for t in rec_titles_list:
+        p_url, p_id = poster_results.get(t, ('', ''))
+        movies.append(t)
+        posters.append(p_url)
+        ids.append(str(p_id))
+
+    return json.dumps({'movies': movies, 'posters': posters, 'ids': ids})
 
 if __name__ == '__main__':
-    app.run(debug=True,host="0.0.0.0",port=5000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(debug=False, host="0.0.0.0", port=port)
