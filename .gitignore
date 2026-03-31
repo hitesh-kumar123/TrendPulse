@@ -43,3 +43,9 @@ Thumbs.db
 logs/
 *.log
 
+# Large Datasets and Important Files
+data/
+
+# Secrets & Keys
+*.key
+*.pem
