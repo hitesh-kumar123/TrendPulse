@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🍿 TrendPulse 🎬
+# 🍿 CineMatch 🎬
 **Intelligent Movie Recommendation Engine powered by Machine Learning & Sentiment Analysis.**
 
 [![Python](https://img.shields.io/badge/Python-3.9+-yellow.svg)](https://www.python.org/)
@@ -15,12 +15,12 @@
 
 ---
 ## 📸 Demo
-![TrendPulse Demo](static/demo.gif)
+![CineMatch Demo](static/demo.gif)
 
----
+--- 
 
 ## 📖 Overview
-**TrendPulse** eliminates the paradox of choice for movie nights. By simply searching for a movie you love, our hybrid Machine Learning engine instantly generates 10 highly accurate recommendations. Engineered for a premium user experience, the system seamlessly pulls dynamic metadata (posters, runtime, genres, cast profiles) and real-time audience reviews from the TMDb API. These reviews are then fed through a trained N-Gram text classifier to immediately gauge public sentiment (*Good* or *Bad*).
+**CineMatch** eliminates the paradox of choice for movie nights. By simply searching for a movie you love, our hybrid Machine Learning engine instantly generates 10 highly accurate recommendations. Engineered for a premium user experience, the system seamlessly pulls dynamic metadata (posters, runtime, genres, cast profiles) and real-time audience reviews from the TMDb API. These reviews are then fed through a trained N-Gram text classifier to immediately gauge public sentiment (*Good* or *Bad*).
 
 <br>
 
@@ -68,8 +68,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/devaldaki3/TrendPulse.git
-   cd TrendPulse
+   git clone https://github.com/devaldaki3/CineMatch.git
+   cd CineMatch
    ```
 
 2. **Create a virtual environment:**
@@ -97,7 +97,7 @@
 ## 📂 Project Structure
 
 ```text
-TrendPulse/
+CineMatch/
 ├── app.py                     # Main Flask Application routing & ML inference
 ├── README.md                  # Project Documentation
 ├── requirements.txt           # Listed dependencies for Web App and Jupyter

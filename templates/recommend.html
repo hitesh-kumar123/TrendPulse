@@ -1,18 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-	<title>CineMatch - Recommendations</title>
-	<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}">
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<link href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans&display=swap" rel="stylesheet">
-	<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP&display=swap" rel="stylesheet">
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-	<link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='style.css') }}">
-</head>
 
-<body id="content">
 	<div class="results">
 	    <center>
 	      <h2 id="name" class="text-uppercase">{{title}}</h2>
@@ -44,7 +30,7 @@
 <br/>
 	
 {% for name, details in cast_details.items() if not cast_details.hidden %}
-  <div class="modal fade" id="{{details[0]}}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel3" aria-hidden="true">
+  <div class="modal fade" id="modal_{{details[0]}}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel3" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
       <div class="modal-content">
         <div class="modal-header" style="background-color: #FAFA33;color: white;">
@@ -84,7 +70,7 @@
 
   <div class="movie-content">
         {% for name, details in casts.items() if not casts.hidden %}
-          <div class="castcard card" style="width: 15rem;" title="Click to know more about {{name}}" data-toggle="modal" data-target="#{{details[0]}}">
+          <div class="castcard card" style="width: 15rem;" title="Click to know more about {{name}}" data-toggle="modal" data-target="#modal_{{details[0]}}">
             <div class="imghvr">
               <img class="card-img-top cast-img" id="{{details[0]}}" height="360" width="240" alt="{{name}} - profile" src="{{details[2]}}">
               <figcaption class="fig">
@@ -176,11 +162,7 @@
     
     </div>
   </div>
-  
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-  <script type="text/javascript" src="{{url_for('static', filename='recommend.js')}}"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
   <script>
     function checkReviewLengths() {
       document.querySelectorAll('.review-card').forEach(function(card) {
@@ -199,5 +181,3 @@
     setTimeout(checkReviewLengths, 100);
     window.addEventListener('resize', checkReviewLengths);
   </script>
-</body>
-</html>
